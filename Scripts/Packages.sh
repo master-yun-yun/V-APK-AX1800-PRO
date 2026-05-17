@@ -69,14 +69,14 @@ UPDATE_PACKAGE "diskman" "sbwml/luci-app-diskman" "main"
 UPDATE_PACKAGE "diskmanager" "4IceG/luci-app-mini-diskmanager" "main"
 UPDATE_PACKAGE "easytier" "EasyTier/luci-app-easytier" "main"
 UPDATE_PACKAGE "mosdns" "sbwml/luci-app-mosdns" "v5" "" "v2dat"
-UPDATE_PACKAGE "netspeedtest" "sirpdboy/netspeedtest" "main" "" "homebox ookla-speedtest"
+#UPDATE_PACKAGE "netspeedtest" "sirpdboy/netspeedtest" "main" "" "homebox ookla-speedtest"
 UPDATE_PACKAGE "netwizard" "sirpdboy/luci-app-netwizard" "main"
 UPDATE_PACKAGE "openlist2" "sbwml/luci-app-openlist2" "main"
-UPDATE_PACKAGE "partexp" "sirpdboy/luci-app-partexp" "main"
+#UPDATE_PACKAGE "partexp" "sirpdboy/luci-app-partexp" "main"
 UPDATE_PACKAGE "qbittorrent" "sbwml/luci-app-qbittorrent" "master" "" "qt6base qt6tools rblibtorrent"
 UPDATE_PACKAGE "qmodem" "FUjr/QModem" "main"
 UPDATE_PACKAGE "quickfile" "sbwml/luci-app-quickfile" "main"
-UPDATE_PACKAGE "timecontrol" "sirpdboy/luci-app-timecontrol" "main"
+#UPDATE_PACKAGE "timecontrol" "sirpdboy/luci-app-timecontrol" "main"
 UPDATE_PACKAGE "viking" "VIKINGYFY/packages" "main" "" "gecoosac luci-app-timewol luci-app-wolplus"
 UPDATE_PACKAGE "vnt" "lmq8267/luci-app-vnt" "main"
 
@@ -128,3 +128,63 @@ UPDATE_VERSION "sing-box"
 if [ -f "$GITHUB_WORKSPACE/Scripts/PRIVATE.sh" ]; then
 	source "$GITHUB_WORKSPACE/Scripts/PRIVATE.sh"
 fi
+
+
+#------------------以下自定义源--------------------#
+
+# 全能推送PushBot----OK
+UPDATE_PACKAGE "luci-app-pushbot" "zzsj0928/luci-app-pushbot" "master"
+
+# 关机poweroff----OK
+UPDATE_PACKAGE "luci-app-poweroff" "DongyangHu/luci-app-poweroff" "main"
+
+# 主题界面edge----OK
+UPDATE_PACKAGE "luci-theme-edge" "ricemices/luci-theme-edge" "master"
+
+# 分区扩容----OK
+UPDATE_PACKAGE "luci-app-partexp" "sirpdboy/luci-app-partexp" "main"
+
+# luci-app-navidrome音乐服务器----OK
+UPDATE_PACKAGE "luci-app-navidrome" "tty228/luci-app-navidrome" "main"
+
+# 端口转发luci-app-socat----OK
+UPDATE_PACKAGE "luci-app-socat" "WROIATE/luci-app-socat" "main"
+
+# timecontrol 上网时间控制插件 - 上网时间控制NFT版2.0.2版==专门针对24.10分支，适配NFT的上网时间控制插件。
+UPDATE_PACKAGE "luci-app-timecontrol" "sirpdboy/luci-app-timecontrol" "main"
+
+# luci-app-taskplan 任务设置2.0版
+UPDATE_PACKAGE "luci-app-taskplan" "sirpdboy/luci-app-taskplan" "main"
+
+# 微力同步
+UPDATE_PACKAGE "verysync" "kiddin9/op-packages" "main" "pkg"
+UPDATE_PACKAGE "luci-app-verysync" "kiddin9/op-packages" "main" "pkg"
+
+# SunPanel导航页
+UPDATE_PACKAGE "sunpanel" "kiddin9/op-packages" "main" "pkg"
+UPDATE_PACKAGE "luci-app-sunpanel" "kiddin9/op-packages" "main" "pkg"
+
+# Memos知识管理
+UPDATE_PACKAGE "luci-app-memos" "kiddin9/op-packages" "main" "pkg"
+
+# 原高级设置升级版本
+UPDATE_PACKAGE "luci-app-advancedplus" "sirpdboy/luci-app-advancedplus" "main"
+
+# luci-app-athena-led-雅典娜led屏幕显示（第一个源显示效果不好）
+#UPDATE_PACKAGE "luci-app-athena-led" "haipengno1/luci-app-athena-led" "main"
+UPDATE_PACKAGE "luci-app-athena-led" "NONGFAH/luci-app-athena-led" "main"
+# 2026.05.09最新但未启用
+#UPDATE_PACKAGE "athena-led" "unraveloop/JDC-AX6600-Athena-LED-Controller" "main"
+
+# 添加雅典娜LED执行权限
+if [ -d "luci-app-athena-led" ]; then
+    chmod +x luci-app-athena-led/root/etc/init.d/athena_led
+    chmod +x luci-app-athena-led/root/usr/sbin/athena-led
+    echo "Added execute permissions for athena_led files."
+fi
+
+#-------------------2026.04.06以下小龙虾----------------------------#
+
+UPDATE_PACKAGE "luci-app-openclaw" "10000ge10000/luci-app-openclaw" "main"
+
+#-------------------2026.04.06以上小龙虾----------------------------#
