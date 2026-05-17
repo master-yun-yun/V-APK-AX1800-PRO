@@ -1,0 +1,40 @@
+name: Sync Upstream
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout your repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0  # 必须完整历史
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream and fetch
+        run: |
+          git remote add upstream https://github.com/VIKINGYFY/OpenWRT-CI.git
+          git fetch upstream
+
+      - name: Sync with rebase (保留你的修改)
+        run: |
+          # 保存当前分支名
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          
+          # 先暂存你的修改（如果有未提交的）
+          git stash || true
+          
+          # 关键：用 rebase 把你的提交放到上游最新提交之上
+          git rebase upstream/main
+          
+          # 如果 rebase 成功，强制推送
+          git push origin $BRANCH --force-with-lease
