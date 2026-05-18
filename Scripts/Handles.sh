@@ -94,20 +94,23 @@ if [ -f "$RUST_FILE" ]; then
 fi
 
 # -----------------------------------------------------------
-# 修复第三方插件 Makefile 中非法的版本号（解决 apk 包管理器报错）
+# 彻底修复 APK 包管理器对版本号格式的严格校验
 # -----------------------------------------------------------
-echo "正在修复不规范的软件包版本号..."
+echo "正在修复不规范的软件包版本号为 apk 兼容格式(点号分隔)..."
 
-# 1. 批量修复包含类似 -20240822 这种日期后缀的非法版本号（将连字符替换为下划线）
-find ./ -name "Makefile" -exec sed -i 's/PKG_VERSION:=\(.*\)-\(20[0-9]\{2\}[0-9]\{4\}\)/PKG_VERSION:=\1_\2/g' {} +
+# 1. 批量修复包含日期后缀的版本号（将连字符 - 或下划线 _ 均替换为点号 . ）
+# 效果：1.0.2-20240822 或 1.0.2_20240822 -> 1.0.2.20240822
+find ./ -name "Makefile" -exec sed -i 's/PKG_VERSION:=\(.*\)-\(20[0-9]\{2\}[0-9]\{4\}\)/PKG_VERSION:=\1.\2/g' {} +
+find ./ -name "Makefile" -exec sed -i 's/PKG_VERSION:=\(.*\)_\(20[0-9]\{2\}[0-9]\{4\}\)/PKG_VERSION:=\1.\2/g' {} +
 
-# 2. 针对性修复 luci-app-memos
-find ./ -name "Makefile" -path "*/luci-app-memos/*" -exec sed -i 's/PKG_VERSION:=.*/PKG_VERSION:=1.0.2_20240822/g' {} +
+# 2. 针对性修复 luci-app-memos，强制使用点号格式
+find ./ -name "Makefile" -path "*/luci-app-memos/*" -exec sed -i 's/PKG_VERSION:=.*/PKG_VERSION:=1.0.2.20240822/g' {} +
 
-# 3. 针对性修复 luci-app-sunpanel
+# 3. 针对性修复 luci-app-sunpanel，去除多余后缀
 find ./ -name "Makefile" -path "*/luci-app-sunpanel/*" -exec sed -i 's/PKG_VERSION:=.*/PKG_VERSION:=1.0.0/g' {} +
 
-# 4. 针对性修复 luci-app-pushbot (若有遗漏)
+# 4. 针对性修复 luci-app-pushbot，去除多余后缀
 find ./ -name "Makefile" -path "*/luci-app-pushbot/*" -exec sed -i 's/PKG_VERSION:=.*/PKG_VERSION:=1.0.0/g' {} +
 
-echo "版本号修复完成！"
+echo "APK 兼容版本号修复完成！"
+
