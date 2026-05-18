@@ -163,6 +163,7 @@ UPDATE_PACKAGE "luci-app-verysync" "kiddin9/op-packages" "main" "pkg"
 # SunPanel导航页
 UPDATE_PACKAGE "sunpanel" "kiddin9/op-packages" "main" "pkg"
 UPDATE_PACKAGE "luci-app-sunpanel" "kiddin9/op-packages" "main" "pkg"
+UPDATE_PACKAGE "luci-lib-taskd" "kiddin9/op-packages" "main" "pkg"
 
 # Memos知识管理
 UPDATE_PACKAGE "luci-app-memos" "kiddin9/op-packages" "main" "pkg"
