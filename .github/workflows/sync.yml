@@ -12,7 +12,7 @@ jobs:
       - name: Checkout your repo
         uses: actions/checkout@v4
         with:
-          token: ${{ SYNC_APK }}  # 或 ${{ secrets.GITHUB_TOKEN }} 如果开了写权限
+          token: ${{ secrets.SYNC_APK }}  # 或 ${{ secrets.GITHUB_TOKEN }} 如果开了写权限
           fetch-depth: 0
 
       - name: Configure Git
