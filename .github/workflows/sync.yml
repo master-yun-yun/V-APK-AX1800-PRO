@@ -2,8 +2,8 @@ name: Sync Upstream
 
 on:
   schedule:
-    - cron: '0 2 * * *'
-  workflow_dispatch:
+    - cron: '0 2 * * *'    # 每天凌晨2点自动运行
+  workflow_dispatch:         # 支持手动触发
 
 jobs:
   sync:
@@ -12,7 +12,7 @@ jobs:
       - name: Checkout your repo
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.SYNC_APK }}  # 或 ${{ secrets.GITHUB_TOKEN }} 如果开了写权限
+          token: ${{ secrets.SYNC_APK }}
           fetch-depth: 0
 
       - name: Configure Git
@@ -20,9 +20,98 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Add upstream and sync
+      - name: Sync upstream and show results
+        id: sync
         run: |
+          set -euo pipefail
+          
+          # 1. 添加上游并获取最新代码（包含标签）
           git remote add upstream https://github.com/VIKINGYFY/OpenWRT-CI.git
-          git fetch upstream
-          git rebase upstream/main
-          git push origin main --force-with-lease
+          git fetch upstream --tags
+          
+          LOCAL_SHA=$(git rev-parse --short HEAD)
+          UPSTREAM_SHA=$(git rev-parse --short upstream/main)
+          LOCAL_FULL=$(git rev-parse HEAD)
+          
+          echo "========================================"
+          echo "🔍 同步前状态检查"
+          echo "========================================"
+          echo "📌 本地 main:  $LOCAL_SHA"
+          echo "📌 上游 main:  $UPSTREAM_SHA"
+          
+          # 2. 判断本地与上游的关系
+          
+          # 情况A：完全一致
+          if [ "$LOCAL_FULL" = "$(git rev-parse upstream/main)" ]; then
+            echo ""
+            echo "✅ 结果：本地与上游完全一致，无需同步"
+            echo "========================================"
+            exit 0
+          fi
+          
+          # 情况B：本地领先上游（有你的自定义修改）
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            AHEAD=$(git rev-list --count upstream/main..HEAD)
+            echo ""
+            echo "✅ 结果：本地领先上游 $AHEAD 个提交"
+            echo "   （这些是你的自定义修改，无需同步上游）"
+            echo "========================================"
+            exit 0
+          fi
+          
+          # 情况C：本地落后上游，需要同步
+          BEHIND=$(git rev-list --count HEAD..upstream/main)
+          echo ""
+          echo "🆕 检测到上游有 $BEHIND 个新提交，准备同步..."
+          echo "========================================"
+          
+          # 3. 执行 rebase（将你的修改移到上游最新提交之上）
+          if git rebase upstream/main; then
+            NEW_SHA=$(git rev-parse --short HEAD)
+            NEW_FULL=$(git rev-parse HEAD)
+            SYNC_COMMITS=$(git rev-list --count $LOCAL_FULL..$NEW_FULL)
+            
+            echo ""
+            echo "========================================"
+            echo "✅ 同步成功！"
+            echo "========================================"
+            echo "📊 统计信息"
+            echo "   • 同步前提交: $LOCAL_SHA"
+            echo "   • 同步后提交: $NEW_SHA"
+            echo "   • 新增上游提交: $SYNC_COMMITS 个"
+            echo ""
+            echo "📝 新增提交列表:"
+            git log --oneline --no-decorate --reverse $LOCAL_FULL..$NEW_FULL | head -30
+            if [ "$SYNC_COMMITS" -gt 30 ]; then
+              echo "   ... 还有 $((SYNC_COMMITS - 30)) 个提交未显示"
+            fi
+            echo ""
+            echo "📁 文件变更统计:"
+            git diff --stat $LOCAL_FULL $NEW_FULL
+            echo "========================================"
+            
+            # 4. 推送到你的仓库
+            echo ""
+            echo "🚀 正在推送到 origin/main..."
+            git push origin main --force-with-lease
+            echo "✅ 推送完成！"
+            echo "========================================"
+            
+          else
+            # 5. Rebase 失败（存在冲突），安全回退
+            echo ""
+            echo "========================================"
+            echo "❌ 同步失败！检测到代码冲突"
+            echo "========================================"
+            echo "🔄 正在中止 rebase，恢复到同步前状态..."
+            git rebase --abort || true
+            echo ""
+            echo "💡 解决建议:"
+            echo "   1. 在本地手动执行："
+            echo "      git fetch upstream"
+            echo "      git rebase upstream/main"
+            echo "   2. 解决冲突后重新推送"
+            echo "   3. 或者删除本地修改，用上游最新代码覆盖"
+            echo "========================================"
+            exit 1
+          fi
