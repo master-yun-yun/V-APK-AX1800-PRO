@@ -92,3 +92,22 @@ if [ -f "$RUST_FILE" ]; then
 
 	cd $PKG_PATH && echo "rust has been fixed!"
 fi
+
+# -----------------------------------------------------------
+# 修复第三方插件 Makefile 中非法的版本号（解决 apk 包管理器报错）
+# -----------------------------------------------------------
+echo "正在修复不规范的软件包版本号..."
+
+# 1. 批量修复包含类似 -20240822 这种日期后缀的非法版本号（将连字符替换为下划线）
+find ./ -name "Makefile" -exec sed -i 's/PKG_VERSION:=\(.*\)-\(20[0-9]\{2\}[0-9]\{4\}\)/PKG_VERSION:=\1_\2/g' {} +
+
+# 2. 针对性修复 luci-app-memos
+find ./ -name "Makefile" -path "*/luci-app-memos/*" -exec sed -i 's/PKG_VERSION:=.*/PKG_VERSION:=1.0.2_20240822/g' {} +
+
+# 3. 针对性修复 luci-app-sunpanel
+find ./ -name "Makefile" -path "*/luci-app-sunpanel/*" -exec sed -i 's/PKG_VERSION:=.*/PKG_VERSION:=1.0.0/g' {} +
+
+# 4. 针对性修复 luci-app-pushbot (若有遗漏)
+find ./ -name "Makefile" -path "*/luci-app-pushbot/*" -exec sed -i 's/PKG_VERSION:=.*/PKG_VERSION:=1.0.0/g' {} +
+
+echo "版本号修复完成！"
