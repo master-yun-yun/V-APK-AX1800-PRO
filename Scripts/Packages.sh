@@ -195,10 +195,14 @@ UPDATE_PACKAGE "luci-app-openclaw" "10000ge10000/luci-app-openclaw" "main"
 #-----------2026.05.24-----------#
 # luci-app-taskplan 任务设置2.0版
 UPDATE_PACKAGE "luci-app-taskplan" "sirpdboy/luci-app-taskplan" "main"
-# 应用过滤
-UPDATE_PACKAGE "open-app-filter" "kiddin9/op-packages" "main" "pkg"
-UPDATE_PACKAGE "oaf" "kiddin9/op-packages" "main" "pkg"
-UPDATE_PACKAGE "luci-app-oaf" "kiddin9/op-packages" "main" "pkg"
+# 应用过滤-----kiddin9/op-packages
+#UPDATE_PACKAGE "open-app-filter" "kiddin9/op-packages" "main" "pkg"
+#UPDATE_PACKAGE "oaf" "kiddin9/op-packages" "main" "pkg"
+#UPDATE_PACKAGE "luci-app-oaf" "kiddin9/op-packages" "main" "pkg"
+# 应用过滤-----源码作者
+UPDATE_PACKAGE "open-app-filter" "destan19/OpenAppFilter" "master"
+UPDATE_PACKAGE "oaf" "destan19/OpenAppFilter" "master"
+UPDATE_PACKAGE "luci-app-oaf" "destan19/OpenAppFilter" "master"
 # istore增强
 UPDATE_PACKAGE "istoreenhance" "kiddin9/op-packages" "main" "pkg"
 UPDATE_PACKAGE "luci-app-istoreenhance" "kiddin9/op-packages" "main" "pkg"
