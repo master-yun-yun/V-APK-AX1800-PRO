@@ -85,17 +85,6 @@ jobs:
           sudo mkdir -p /mnt/build_wrt
           sudo chown $USER:$USER /mnt/build_wrt
           sudo ln -s /mnt/build_wrt $GITHUB_WORKSPACE/wrt
-
-      # ======= 这里以下为新增的磁盘清理步骤 ======= #
-      - name: Free More Disk Space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-          docker system prune -af || true
-          df -h
-       # ======= 这里以上为新增的磁盘清理步骤 ======= #
        
       - name: Initialization Values
         run: |
