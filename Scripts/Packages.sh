@@ -72,11 +72,11 @@ UPDATE_PACKAGE "mosdns" "sbwml/luci-app-mosdns" "v5" "" "v2dat"
 #UPDATE_PACKAGE "netspeedtest" "sirpdboy/netspeedtest" "main" "" "homebox ookla-speedtest"    #不需要测速
 UPDATE_PACKAGE "netwizard" "sirpdboy/luci-app-netwizard" "main"
 UPDATE_PACKAGE "openlist2" "sbwml/luci-app-openlist2" "main"
-#UPDATE_PACKAGE "partexp" "sirpdboy/luci-app-partexp" "main"  #在自定义
+UPDATE_PACKAGE "partexp" "sirpdboy/luci-app-partexp" "main"
 UPDATE_PACKAGE "qbittorrent" "sbwml/luci-app-qbittorrent" "master" "" "qt6base qt6tools rblibtorrent"
 UPDATE_PACKAGE "qmodem" "FUjr/QModem" "main"
 UPDATE_PACKAGE "quickfile" "sbwml/luci-app-quickfile" "main"
-#UPDATE_PACKAGE "timecontrol" "sirpdboy/luci-app-timecontrol" "main"   #在自定义
+UPDATE_PACKAGE "timecontrol" "sirpdboy/luci-app-timecontrol" "main"
 UPDATE_PACKAGE "viking" "VIKINGYFY/packages" "main" "" "gecoosac luci-app-timewol luci-app-wolplus"
 UPDATE_PACKAGE "vnt" "lmq8267/luci-app-vnt" "main"
 
@@ -142,7 +142,7 @@ UPDATE_PACKAGE "luci-app-poweroff" "DongyangHu/luci-app-poweroff" "main"
 UPDATE_PACKAGE "luci-theme-edge" "ricemices/luci-theme-edge" "master"
 
 # 分区扩容----OK
-UPDATE_PACKAGE "luci-app-partexp" "sirpdboy/luci-app-partexp" "main"
+#UPDATE_PACKAGE "luci-app-partexp" "sirpdboy/luci-app-partexp" "main"  #在前
 
 # luci-app-navidrome音乐服务器----OK
 UPDATE_PACKAGE "luci-app-navidrome" "tty228/luci-app-navidrome" "main"
@@ -151,7 +151,7 @@ UPDATE_PACKAGE "luci-app-navidrome" "tty228/luci-app-navidrome" "main"
 UPDATE_PACKAGE "luci-app-socat" "WROIATE/luci-app-socat" "main"
 
 # timecontrol 上网时间控制插件 - 上网时间控制NFT版2.0.2版==专门针对24.10分支，适配NFT的上网时间控制插件。
-UPDATE_PACKAGE "luci-app-timecontrol" "sirpdboy/luci-app-timecontrol" "main"
+#UPDATE_PACKAGE "luci-app-timecontrol" "sirpdboy/luci-app-timecontrol" "main"  #在前
 
 # luci-app-taskplan 任务设置2.0版
 UPDATE_PACKAGE "luci-app-taskplan" "sirpdboy/luci-app-taskplan" "main"
@@ -176,7 +176,7 @@ UPDATE_PACKAGE "luci-app-advancedplus" "sirpdboy/luci-app-advancedplus" "main"
 # luci-app-athena-led-雅典娜led屏幕显示（第一个源显示效果不好）
 #UPDATE_PACKAGE "luci-app-athena-led" "haipengno1/luci-app-athena-led" "main"
 UPDATE_PACKAGE "luci-app-athena-led" "NONGFAH/luci-app-athena-led" "main"
-# 2026.05.09最新但未启用
+# 2026.05.09最新但未启用--luci-app-athena-led-雅典娜led屏幕显示
 #UPDATE_PACKAGE "athena-led" "unraveloop/JDC-AX6600-Athena-LED-Controller" "main"
 
 # 添加雅典娜LED执行权限
