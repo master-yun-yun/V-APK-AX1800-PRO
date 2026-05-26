@@ -26,7 +26,8 @@ jobs:
           set -euo pipefail
           
           # 1. 添加上游并获取最新代码（包含标签）
-          git remote add upstream https://github.com/VIKINGYFY/OpenWRT-CI.git
+          # 使用 set-url 防止重复添加报错
+          git remote add upstream https://github.com/VIKINGYFY/OpenWRT-CI.git 2>/dev/null || git remote set-url upstream https://github.com/VIKINGYFY/OpenWRT-CI.git
           git fetch upstream --tags
           
           LOCAL_SHA=$(git rev-parse --short HEAD)
@@ -81,13 +82,14 @@ jobs:
             echo "   • 新增上游提交: $SYNC_COMMITS 个"
             echo ""
             echo "📝 新增提交列表:"
-            git log --oneline --no-decorate --reverse $LOCAL_FULL..$NEW_FULL | head -30 || true
+            # 修复：使用 -n 30 代替 | head -30，彻底避免 SIGPIPE (exit code 141)
+            git log --oneline --no-decorate --reverse -n 30 $LOCAL_FULL..$NEW_FULL
             if [ "$SYNC_COMMITS" -gt 30 ]; then
               echo "   ... 还有 $((SYNC_COMMITS - 30)) 个提交未显示"
             fi
             echo ""
             echo "📁 文件变更统计:"
-            git diff --stat $LOCAL_FULL $NEW_FULL
+            git diff --stat $LOCAL_FULL $NEW_FULL || true
             echo "========================================"
             
             # 4. 推送到你的仓库
