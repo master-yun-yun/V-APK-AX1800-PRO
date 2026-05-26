@@ -81,7 +81,7 @@ jobs:
             echo "   • 新增上游提交: $SYNC_COMMITS 个"
             echo ""
             echo "📝 新增提交列表:"
-            git log --oneline --no-decorate --reverse $LOCAL_FULL..$NEW_FULL | head -30
+            git log --oneline --no-decorate --reverse $LOCAL_FULL..$NEW_FULL | head -30 || true
             if [ "$SYNC_COMMITS" -gt 30 ]; then
               echo "   ... 还有 $((SYNC_COMMITS - 30)) 个提交未显示"
             fi
