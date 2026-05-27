@@ -2,8 +2,8 @@ name: Sync Upstream
 
 on:
   schedule:
-    - cron: '0 2 * * *'    # 每天凌晨2点自动运行
-  workflow_dispatch:         # 支持手动触发
+    - cron: '0 2 * * *'
+  workflow_dispatch:
 
 jobs:
   sync:
@@ -26,7 +26,6 @@ jobs:
           set -euo pipefail
           
           # 1. 添加上游并获取最新代码（包含标签）
-          # 使用 set-url 防止重复添加报错
           git remote add upstream https://github.com/VIKINGYFY/OpenWRT-CI.git 2>/dev/null || git remote set-url upstream https://github.com/VIKINGYFY/OpenWRT-CI.git
           git fetch upstream --tags
           
@@ -40,8 +39,6 @@ jobs:
           echo "📌 本地 main:  $LOCAL_SHA"
           echo "📌 上游 main:  $UPSTREAM_SHA"
           
-          # 2. 判断本地与上游的关系
-          
           # 情况A：完全一致
           if [ "$LOCAL_FULL" = "$(git rev-parse upstream/main)" ]; then
             echo ""
@@ -50,7 +47,7 @@ jobs:
             exit 0
           fi
           
-          # 情况B：本地领先上游（有你的自定义修改）
+          # 情况B：本地领先上游
           if git merge-base --is-ancestor upstream/main HEAD; then
             AHEAD=$(git rev-list --count upstream/main..HEAD)
             echo ""
@@ -66,7 +63,7 @@ jobs:
           echo "🆕 检测到上游有 $BEHIND 个新提交，准备同步..."
           echo "========================================"
           
-          # 3. 执行 rebase（将你的修改移到上游最新提交之上）
+          # 3. 执行 rebase
           if git rebase upstream/main; then
             NEW_SHA=$(git rev-parse --short HEAD)
             NEW_FULL=$(git rev-parse HEAD)
@@ -82,7 +79,6 @@ jobs:
             echo "   • 新增上游提交: $SYNC_COMMITS 个"
             echo ""
             echo "📝 新增提交列表:"
-            # 修复：使用 -n 30 代替 | head -30，彻底避免 SIGPIPE (exit code 141)
             git log --oneline --no-decorate --reverse -n 30 $LOCAL_FULL..$NEW_FULL
             if [ "$SYNC_COMMITS" -gt 30 ]; then
               echo "   ... 还有 $((SYNC_COMMITS - 30)) 个提交未显示"
@@ -92,7 +88,7 @@ jobs:
             git diff --stat $LOCAL_FULL $NEW_FULL || true
             echo "========================================"
             
-            # 4. 推送到你的仓库
+            # 推送到你的仓库
             echo ""
             echo "🚀 正在推送到 origin/main..."
             git push origin main --force-with-lease
@@ -100,20 +96,89 @@ jobs:
             echo "========================================"
             
           else
-            # 5. Rebase 失败（存在冲突），安全回退
+            # ==================== 冲突详细诊断 ====================
             echo ""
             echo "========================================"
             echo "❌ 同步失败！检测到代码冲突"
             echo "========================================"
+            
+            # 获取冲突文件列表
+            CONFLICT_FILES=$(git diff --name-only --diff-filter=U || true)
+            if [ -z "$CONFLICT_FILES" ]; then
+              echo "⚠️ 无法获取冲突文件列表（rebase 可能因其他原因失败）"
+              git rebase --abort || true
+              exit 1
+            fi
+            
+            echo "📝 冲突文件列表:"
+            echo "$CONFLICT_FILES"
+            echo ""
+            
+            # 逐个文件深度诊断
+            for file in $CONFLICT_FILES; do
+              echo "========================================"
+              echo "📄 冲突文件: $file"
+              echo "========================================"
+              
+              if [ -f "$file" ]; then
+                echo "🔄 冲突标记位置:"
+                grep -n -E '^<{7}|^={7}|^>{7}' "$file" || true
+                echo ""
+                
+                echo "📜 本地历史中谁修改过这个文件:"
+                git log --oneline --all -- "$file" | head -10 || echo "   （无本地修改记录）"
+                echo ""
+                
+                echo "🔼 上游最新提交对这个文件的修改:"
+                git diff upstream/main^..upstream/main -- "$file" || echo "   （无法获取上游差异）"
+                echo ""
+                
+                echo "📋 当前冲突内容预览（前50行）:"
+                head -n 50 "$file" || true
+                echo ""
+              else
+                echo "⚠️ 文件已被删除或无法读取"
+              fi
+              echo ""
+            done
+            
+            echo "========================================"
+            echo "💡 冲突说明:"
+            echo "   • <<<<<<< HEAD  后面是你的本地修改内容"
+            echo "   • =======        是分隔线"
+            echo "   • >>>>>>>        后面是上游（VIKINGYFY）的新内容"
+            echo ""
+            echo "🔧 快速解决命令（复制粘贴执行）:"
+            echo ""
+            echo "   方案1：保留上游版本（推荐，如果你没修改过这些文件）"
+            for file in $CONFLICT_FILES; do
+              echo "      git checkout --theirs \"$file\""
+            done
+            echo "      git add ."
+            echo "      git rebase --continue"
+            echo "      git push origin main --force"
+            echo ""
+            echo "   方案2：保留你的本地版本"
+            for file in $CONFLICT_FILES; do
+              echo "      git checkout --ours \"$file\""
+            done
+            echo "      git add ."
+            echo "      git rebase --continue"
+            echo "      git push origin main --force"
+            echo ""
+            echo "   方案3：手动编辑解决（最精确）"
+            echo "      # 编辑冲突文件，删除 <<<<<<< / ======= / >>>>>>> 标记"
+            echo "      # 保留你想要的代码，然后："
+            echo "      git add ."
+            echo "      git rebase --continue"
+            echo "      git push origin main --force"
+            echo "========================================"
+            
+            # 安全回退
+            echo ""
             echo "🔄 正在中止 rebase，恢复到同步前状态..."
             git rebase --abort || true
-            echo ""
-            echo "💡 解决建议:"
-            echo "   1. 在本地手动执行："
-            echo "      git fetch upstream"
-            echo "      git rebase upstream/main"
-            echo "   2. 解决冲突后重新推送"
-            echo "   3. 或者删除本地修改，用上游最新代码覆盖"
+            echo "✅ 已恢复到同步前状态"
             echo "========================================"
             exit 1
           fi
