@@ -70,7 +70,7 @@ UPDATE_PACKAGE "diskmanager" "4IceG/luci-app-mini-diskmanager" "main"
 UPDATE_PACKAGE "easytier" "EasyTier/luci-app-easytier" "main"
 UPDATE_PACKAGE "mosdns" "sbwml/luci-app-mosdns" "v5" "" "v2dat"
 #UPDATE_PACKAGE "netspeedtest" "sirpdboy/netspeedtest" "main" "" "homebox ookla-speedtest"    #不需要测速
-UPDATE_PACKAGE "netwizard" "sirpdboy/luci-app-netwizard" "main"
+#UPDATE_PACKAGE "netwizard" "sirpdboy/luci-app-netwizard" "main"
 UPDATE_PACKAGE "openlist2" "sbwml/luci-app-openlist2" "main"
 UPDATE_PACKAGE "partexp" "sirpdboy/luci-app-partexp" "main"
 UPDATE_PACKAGE "qbittorrent" "sbwml/luci-app-qbittorrent" "master" "" "qt6base qt6tools rblibtorrent"
@@ -188,7 +188,7 @@ fi
 
 #-------------------2026.04.06以下小龙虾----------------------------#
 
-UPDATE_PACKAGE "luci-app-openclaw" "10000ge10000/luci-app-openclaw" "main"
+#UPDATE_PACKAGE "luci-app-openclaw" "10000ge10000/luci-app-openclaw" "main"
 
 #-------------------2026.04.06以上小龙虾----------------------------#
 
