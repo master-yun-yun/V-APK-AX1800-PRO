@@ -101,72 +101,56 @@ find ./ -name "Makefile" -path "*/luci-app-istoreenhance/*" -exec sed -i 's/PKG_
 echo "APK 兼容版本号修复完成！"
 
 # --------------------------以下2026.06.06---------------------------------#
-# 【终极防线】全方位无死角修复 luci-app-openvpn-server
 # -----------------------------------------------------------
-# 1. 采用绝对路径，涵盖 package 和 feeds 所有可能存在的目录
-OVPNS_DIR=$(find "$GITHUB_WORKSPACE/wrt/" -type d -path "*/luci-app-openvpn-server" | head -n 1)
+# 【终极完美版】luci-app-openvpn-server 安全修复与环境适配
+# -----------------------------------------------------------
+OVPNS_DIR=$(find "$GITHUB_WORKSPACE/wrt/" -maxdepth 5 -type d -path "*/luci-app-openvpn-server" 2>/dev/null | head -n 1)
 
 if [ -n "$OVPNS_DIR" ]; then
-    echo ">> 正在启动全方位核查，实施 luci-app-openvpn-server 核弹级修复..."
-
-    # -----------------------------------------------------------
-    # 第一层：静态文件正则清洗（解决设备抢占与协议死锁）
-    # -----------------------------------------------------------
-    # 统一替换所有的 tun0, tun, 'tun0', "tun" 等各种奇怪的硬编码为专属的 tun-ovpn
-    find "$OVPNS_DIR" -type f -exec sed -i -E "s/(dev|device)[[:space:]]+['\"]?tun[0-9]*['\"]?/\1 'tun-ovpn'/g" {} +
-    find "$OVPNS_DIR" -type f -exec sed -i -E "s/option dev ['\"]?tun[0-9]*['\"]?/option dev 'tun-ovpn'/g" {} +
+    echo ">> 启动 luci-app-openvpn-server 终极修复方案..."
     
-    # 修复 LuCI 界面协议变灰（锁定为系统原生 none 协议）
-    find "$OVPNS_DIR" -type f -exec sed -i -E "s/proto[[:space:]]*=[[:space:]]*['\"]?(ovpn|openvpn)['\"]?/proto='none'/g" {} +
-    find "$OVPNS_DIR" -type f -exec sed -i -E "s/option proto ['\"]?(ovpn|openvpn)['\"]?/option proto 'none'/g" {} +
+    # 开启严格模式：任何命令失败立刻阻断，防止带着隐患打包
+    set -euo pipefail
 
-    # 粗筛删除可见的 secret 毒药代码
-    find "$OVPNS_DIR" -type f -exec sed -i '/secret.*static\.key/d' {} +
-    find "$OVPNS_DIR" -type f -exec sed -i '/option secret/d' {} +
+    # 1. 极高兼容性的正则：匹配带空格、有无引号的 proto 赋值，规避 LuCI 协议变灰死锁
+    find "$OVPNS_DIR" -type f \( -name "*.lua" -o -name "*.sh" \) -exec sh -c '
+        for file do
+            sed -i "s/\(network\.[a-zA-Z0-9_]*\.proto\)[[:space:]]*=[[:space:]]*['\''\"]\?[a-zA-Z0-9_]*['\''\"]\?/\1='\''none'\''/g" "$file"
+        done
+    ' sh {} +
 
-    # -----------------------------------------------------------
-    # 第二层：运行时自愈守卫（解决 TLS 证书漏写与互斥崩溃）
-    # -----------------------------------------------------------
-    # 寻找插件中所有可能生成 server.conf 的 shell 脚本
-    find "$OVPNS_DIR" -type f -name "*.sh" -o -path "*/init.d/*" | while read -r SH_FILE; do
-        # 只要该脚本涉及操作 server.conf，就在其末尾强行注入“自愈守护进程”
-        if grep -q "server.conf" "$SH_FILE"; then
-            cat << 'EOF' >> "$SH_FILE"
-
-# 【系统级自愈补丁】在进程启动前最后把关，确保配置文件绝对健康
-if [ -f "/etc/openvpn/server.conf" ]; then
-    # 1. 如果插件漏写了 TLS 证书，强制补齐
-    grep -q "ca /etc/openvpn/pki/ca.crt" /etc/openvpn/server.conf || echo "ca /etc/openvpn/pki/ca.crt" >> /etc/openvpn/server.conf
-    grep -q "cert /etc/openvpn/pki/server.crt" /etc/openvpn/server.conf || echo "cert /etc/openvpn/pki/server.crt" >> /etc/openvpn/server.conf
-    grep -q "key /etc/openvpn/pki/server.key" /etc/openvpn/server.conf || echo "key /etc/openvpn/pki/server.key" >> /etc/openvpn/server.conf
-    grep -q "dh /etc/openvpn/pki/dh.pem" /etc/openvpn/server.conf || echo "dh /etc/openvpn/pki/dh.pem" >> /etc/openvpn/server.conf
-    
-    # 2. 如果插件在运行时又偷偷生成了废弃的 secret 参数，强制处决
-    sed -i '/secret/d' /etc/openvpn/server.conf
-    
-    # 3. 确保底层设备绝对是 tun-ovpn
-    sed -i -E 's/^dev tun[0-9]*$/dev tun-ovpn/g' /etc/openvpn/server.conf
-fi
-EOF
-        fi
-    done
-
-    # -----------------------------------------------------------
-    # 第三层：网络与防火墙接管（解决无法连入及管理界面阻断）
-    # -----------------------------------------------------------
-    # 创建 OpenWrt 首次开机执行脚本
+    # 2. 生成安全、幂等、全动态解析的 UCI 初始化脚本
     mkdir -p "$OVPNS_DIR/root/etc/uci-defaults"
+    
     cat << 'EOF' > "$OVPNS_DIR/root/etc/uci-defaults/99-fix-openvpn-firewall"
 #!/bin/sh
 
-# 1. 自动将专属虚拟网卡 tun-ovpn 加入 lan 区域，解决 VPN 连上却打不开后台的问题
-if ! uci show firewall.@zone[0].network | grep -q 'tun-ovpn'; then
-    uci add_list firewall.@zone[0].network='tun-ovpn'
-    uci commit firewall
+# 【防呆机制】置于系统根目录的标记文件，确保仅执行一次
+[ -f "/etc/.ovpn_patch_applied" ] && exit 0
+
+# 【时序自洽】如果 openvpn 配置尚未生成，跳过本次执行，等待依赖插件先创建
+if ! uci show openvpn 2>/dev/null | grep -q "=openvpn"; then
+    exit 0
 fi
 
-# 2. 自动在外部防火墙撕开 1194 端口的口子，允许客户端从外网拨号进入
-if ! uci show firewall | grep -q 'Allow-OpenVPN'; then
+# 【动态截获一】准确寻找 lan 区域的 UCI 索引
+LAN_ZONE=$(uci show firewall | awk -F. '/=zone/{split($2,a,"[\\[\\]]"); idx=a[2]} /name='\''lan'\''/{if(idx!="") print "@zone["idx"]"}' | head -n 1)
+
+# 【动态截获二】区分配置节名与接口名，优先获取 dev 虚拟设备参数
+OVPN_CFG=$(uci show openvpn 2>/dev/null | awk -F[.=] '/=openvpn/{print $2; exit}')
+OVPN_IFACE=$(uci get openvpn."$OVPN_CFG".dev 2>/dev/null || true)
+OVPN_IFACE=${OVPN_IFACE:-$OVPN_CFG}
+
+# 绑定网卡至防火墙
+if [ -n "$LAN_ZONE" ] && [ -n "$OVPN_IFACE" ]; then
+    if ! uci show firewall."$LAN_ZONE".network | grep -q "$OVPN_IFACE"; then
+        uci add_list firewall."$LAN_ZONE".network="$OVPN_IFACE"
+        uci commit firewall
+    fi
+fi
+
+# 【绝对精准匹配】放行 1194 端口
+if ! uci show firewall | grep -q "\.name='Allow-OpenVPN'$"; then
     uci add firewall rule
     uci set firewall.@rule[-1].name='Allow-OpenVPN'
     uci set firewall.@rule[-1].src='wan'
@@ -176,11 +160,15 @@ if ! uci show firewall | grep -q 'Allow-OpenVPN'; then
     uci commit firewall
 fi
 
+# 写入执行成功标记，形成闭环
+touch /etc/.ovpn_patch_applied
 exit 0
 EOF
-    # 赋予执行权限
-    chmod +x "$OVPNS_DIR/root/etc/uci-defaults/99-fix-openvpn-firewall"
 
-    echo ">> luci-app-openvpn-server 核弹级修复完成，安全防护已拉满！"
+    # 赋予执行权限并恢复非严格模式，保障后续 Actions 其他编译环节不受影响
+    chmod +x "$OVPNS_DIR/root/etc/uci-defaults/99-fix-openvpn-firewall"
+    set +euo pipefail
+    
+    echo ">> luci-app-openvpn-server 修复完毕：动态截获与安全防护已全面就绪！"
 fi
 # --------------------------以上2026.06.06---------------------------------#
