@@ -99,3 +99,88 @@ find ./ -name "Makefile" -path "*/luci-app-pushbot/*" -exec sed -i 's/PKG_VERSIO
 find ./ -name "Makefile" -path "*/luci-app-istoreenhance/*" -exec sed -i 's/PKG_VERSION:=.*/PKG_VERSION:=0.6.6/g' {} +
 
 echo "APK 兼容版本号修复完成！"
+
+# --------------------------以下2026.06.06---------------------------------#
+# 【终极防线】全方位无死角修复 luci-app-openvpn-server
+# -----------------------------------------------------------
+# 1. 采用绝对路径，涵盖 package 和 feeds 所有可能存在的目录
+OVPNS_DIR=$(find "$GITHUB_WORKSPACE/wrt/" -type d -path "*/luci-app-openvpn-server" | head -n 1)
+
+if [ -n "$OVPNS_DIR" ]; then
+    echo ">> 正在启动全方位核查，实施 luci-app-openvpn-server 核弹级修复..."
+
+    # -----------------------------------------------------------
+    # 第一层：静态文件正则清洗（解决设备抢占与协议死锁）
+    # -----------------------------------------------------------
+    # 统一替换所有的 tun0, tun, 'tun0', "tun" 等各种奇怪的硬编码为专属的 tun-ovpn
+    find "$OVPNS_DIR" -type f -exec sed -i -E "s/(dev|device)[[:space:]]+['\"]?tun[0-9]*['\"]?/\1 'tun-ovpn'/g" {} +
+    find "$OVPNS_DIR" -type f -exec sed -i -E "s/option dev ['\"]?tun[0-9]*['\"]?/option dev 'tun-ovpn'/g" {} +
+    
+    # 修复 LuCI 界面协议变灰（锁定为系统原生 none 协议）
+    find "$OVPNS_DIR" -type f -exec sed -i -E "s/proto[[:space:]]*=[[:space:]]*['\"]?(ovpn|openvpn)['\"]?/proto='none'/g" {} +
+    find "$OVPNS_DIR" -type f -exec sed -i -E "s/option proto ['\"]?(ovpn|openvpn)['\"]?/option proto 'none'/g" {} +
+
+    # 粗筛删除可见的 secret 毒药代码
+    find "$OVPNS_DIR" -type f -exec sed -i '/secret.*static\.key/d' {} +
+    find "$OVPNS_DIR" -type f -exec sed -i '/option secret/d' {} +
+
+    # -----------------------------------------------------------
+    # 第二层：运行时自愈守卫（解决 TLS 证书漏写与互斥崩溃）
+    # -----------------------------------------------------------
+    # 寻找插件中所有可能生成 server.conf 的 shell 脚本
+    find "$OVPNS_DIR" -type f -name "*.sh" -o -path "*/init.d/*" | while read -r SH_FILE; do
+        # 只要该脚本涉及操作 server.conf，就在其末尾强行注入“自愈守护进程”
+        if grep -q "server.conf" "$SH_FILE"; then
+            cat << 'EOF' >> "$SH_FILE"
+
+# 【系统级自愈补丁】在进程启动前最后把关，确保配置文件绝对健康
+if [ -f "/etc/openvpn/server.conf" ]; then
+    # 1. 如果插件漏写了 TLS 证书，强制补齐
+    grep -q "ca /etc/openvpn/pki/ca.crt" /etc/openvpn/server.conf || echo "ca /etc/openvpn/pki/ca.crt" >> /etc/openvpn/server.conf
+    grep -q "cert /etc/openvpn/pki/server.crt" /etc/openvpn/server.conf || echo "cert /etc/openvpn/pki/server.crt" >> /etc/openvpn/server.conf
+    grep -q "key /etc/openvpn/pki/server.key" /etc/openvpn/server.conf || echo "key /etc/openvpn/pki/server.key" >> /etc/openvpn/server.conf
+    grep -q "dh /etc/openvpn/pki/dh.pem" /etc/openvpn/server.conf || echo "dh /etc/openvpn/pki/dh.pem" >> /etc/openvpn/server.conf
+    
+    # 2. 如果插件在运行时又偷偷生成了废弃的 secret 参数，强制处决
+    sed -i '/secret/d' /etc/openvpn/server.conf
+    
+    # 3. 确保底层设备绝对是 tun-ovpn
+    sed -i -E 's/^dev tun[0-9]*$/dev tun-ovpn/g' /etc/openvpn/server.conf
+fi
+EOF
+        fi
+    done
+
+    # -----------------------------------------------------------
+    # 第三层：网络与防火墙接管（解决无法连入及管理界面阻断）
+    # -----------------------------------------------------------
+    # 创建 OpenWrt 首次开机执行脚本
+    mkdir -p "$OVPNS_DIR/root/etc/uci-defaults"
+    cat << 'EOF' > "$OVPNS_DIR/root/etc/uci-defaults/99-fix-openvpn-firewall"
+#!/bin/sh
+
+# 1. 自动将专属虚拟网卡 tun-ovpn 加入 lan 区域，解决 VPN 连上却打不开后台的问题
+if ! uci show firewall.@zone[0].network | grep -q 'tun-ovpn'; then
+    uci add_list firewall.@zone[0].network='tun-ovpn'
+    uci commit firewall
+fi
+
+# 2. 自动在外部防火墙撕开 1194 端口的口子，允许客户端从外网拨号进入
+if ! uci show firewall | grep -q 'Allow-OpenVPN'; then
+    uci add firewall rule
+    uci set firewall.@rule[-1].name='Allow-OpenVPN'
+    uci set firewall.@rule[-1].src='wan'
+    uci set firewall.@rule[-1].target='ACCEPT'
+    uci set firewall.@rule[-1].proto='udp'
+    uci set firewall.@rule[-1].dest_port='1194'
+    uci commit firewall
+fi
+
+exit 0
+EOF
+    # 赋予执行权限
+    chmod +x "$OVPNS_DIR/root/etc/uci-defaults/99-fix-openvpn-firewall"
+
+    echo ">> luci-app-openvpn-server 核弹级修复完成，安全防护已拉满！"
+fi
+# --------------------------以上2026.06.06---------------------------------#
