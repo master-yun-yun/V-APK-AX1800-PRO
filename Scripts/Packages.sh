@@ -203,7 +203,7 @@ fi
 #UPDATE_PACKAGE "oaf" "destan19/OpenAppFilter" "master"
 #UPDATE_PACKAGE "luci-app-oaf" "destan19/OpenAppFilter" "master"
 # 应用过滤-----源码作者（只克隆一次，保留完整仓库结构）
-UPDATE_PACKAGE "OpenAppFilter" "destan19/OpenAppFilter" "master" "name" "open-app-filter oaf luci-app-oaf"
+UPDATE_PACKAGE "OpenAppFilter" "destan19/OpenAppFilter" "master" "" "open-app-filter oaf luci-app-oaf"
 # istore增强
 UPDATE_PACKAGE "istoreenhance" "kiddin9/op-packages" "main" "pkg"
 UPDATE_PACKAGE "luci-app-istoreenhance" "kiddin9/op-packages" "main" "pkg"
