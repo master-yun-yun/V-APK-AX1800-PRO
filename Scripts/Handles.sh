@@ -100,3 +100,48 @@ find ./ -name "Makefile" -path "*/luci-app-istoreenhance/*" -exec sed -i 's/PKG_
 
 echo "APK 兼容版本号修复完成！"
 
+#-------------以下===============2026.06.05=============----------#
+# 彻底修复 luci-app-openvpn-server 协议报错及深度设备冲突 (终极安全版)
+OVPNS_FILE=$(find ./ -maxdepth 4 -type f -path "*/luci-app-openvpn-server/root/etc/init.d/openvpn-server")
+if [ -f "$OVPNS_FILE" ]; then
+	echo "Fixing openvpn-server network interface proto and device..."
+
+	# 1. 兼容性协议修复：强制替换为 none (不配置协议)
+	sed -i -E "s/network\.myvpn\.proto=['\"]?(ovpn|openvpn)['\"]?/network.myvpn.proto='none'/g" "$OVPNS_FILE"
+
+	# 2. 终极设备防冲突：使用专属名称 tun-ovpn，彻底杜绝与 OpenClash/Passwall 等插件抢夺 tun0/tun1
+	sed -i -E "s/network\.myvpn\.device=['\"]?tun0['\"]?/network.myvpn.device='tun-ovpn'/g" "$OVPNS_FILE"
+
+	# 3. 同步修改 OpenVPN 进程自身的配置选项
+	sed -i -E "s/option dev ['\"]?tun0['\"]?/option dev 'tun-ovpn'/g" "$OVPNS_FILE"
+
+	echo "openvpn-server interface and device have been completely fixed!"
+fi
+
+# 4. 暴力排查并修复该插件目录下所有可能硬编码 tun0 的文件（如防火墙、LuCI 界面默认值）
+OVPNS_DIR=$(find ./ -maxdepth 4 -type d -path "*/luci-app-openvpn-server" | head -n 1)
+if [ -n "$OVPNS_DIR" ]; then
+	echo "Scanning and fixing hardcoded tun0 in openvpn-server firewall/luci files..."
+	find "$OVPNS_DIR" -type f -exec grep -l "tun0" {} + | while read -r file; do
+		sed -i "s/tun0/tun-ovpn/g" "$file"
+		echo "  -> Fixed hardcoded tun0 in: $file"
+	done
+fi
+
+# 自动将 OpenVPN 接口加入 LAN 防火墙区域，解决无法访问管理页面的问题
+mkdir -p ./package/base-files/files/etc/uci-defaults/
+cat << 'EOF' > ./package/base-files/files/etc/uci-defaults/99-openvpn-firewall
+#!/bin/sh
+
+# 检查防火墙配置中是否存在 myvpn 接口，如果不存在则将其加入 lan 区域的涵盖网络中
+if ! uci show firewall.@zone[0].network | grep -q 'myvpn'; then
+    uci add_list firewall.@zone[0].network='myvpn'
+    uci commit firewall
+fi
+
+exit 0
+EOF
+# 赋予执行权限
+chmod +x ./package/base-files/files/etc/uci-defaults/99-openvpn-firewall
+echo "OpenVPN firewall auto-binding script added!"
+#-------------以上===============2026.06.05=============----------#
