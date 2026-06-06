@@ -103,54 +103,70 @@ echo "APK 兼容版本号修复完成！"
 # --------------------------以下2026.06.06---------------------------------#
 # -----------------------------------------------------------
 # 【终极完美版】luci-app-openvpn-server 安全修复与环境适配
-# -----------------------------------------------------------
 OVPNS_DIR=$(find "$GITHUB_WORKSPACE/wrt/" -maxdepth 5 -type d -path "*/luci-app-openvpn-server" 2>/dev/null | head -n 1)
 
 if [ -n "$OVPNS_DIR" ]; then
-    echo ">> 启动 luci-app-openvpn-server 终极修复方案..."
-    
-    # 开启严格模式：任何命令失败立刻阻断，防止带着隐患打包
     set -euo pipefail
-
-    # 1. 极高兼容性的正则：匹配带空格、有无引号的 proto 赋值，规避 LuCI 协议变灰死锁
-    find "$OVPNS_DIR" -type f \( -name "*.lua" -o -name "*.sh" \) -exec sh -c '
-        for file do
-            sed -i "s/\(network\.[a-zA-Z0-9_]*\.proto\)[[:space:]]*=[[:space:]]*['\''\"]\?[a-zA-Z0-9_]*['\''\"]\?/\1='\''none'\''/g" "$file"
-        done
-    ' sh {} +
-
-    # 2. 生成安全、幂等、全动态解析的 UCI 初始化脚本
     mkdir -p "$OVPNS_DIR/root/etc/uci-defaults"
     
     cat << 'EOF' > "$OVPNS_DIR/root/etc/uci-defaults/99-fix-openvpn-firewall"
 #!/bin/sh
-
-# 【防呆机制】置于系统根目录的标记文件，确保仅执行一次
 [ -f "/etc/.ovpn_patch_applied" ] && exit 0
 
-# 【时序自洽】如果 openvpn 配置尚未生成，跳过本次执行，等待依赖插件先创建
-if ! uci show openvpn 2>/dev/null | grep -q "=openvpn"; then
-    exit 0
+# ============================================================
+# 修复 1：自动修正所有非法 proto 的 VPN 网络接口
+# 无论插件生成 myvpn、vpn0 还是其他名字，全部扫描处理
+# ============================================================
+for iface in $(uci show network 2>/dev/null | grep -oE "^network\.[a-zA-Z0-9_]+\.proto=" | sed 's/^network\.//;s/\.proto=$//' | sort -u); do
+    proto=$(uci get "network.$iface.proto" 2>/dev/null || true)
+    
+    # 匹配所有 OpenVPN 相关的非法协议值
+    case "$proto" in
+        ovpn|openvpn|ovpn-server|openvpn-server)
+            dev=$(uci get "network.$iface.device" 2>/dev/null || true)
+            # 只处理 tun/tap 设备，避免误改其他接口
+            if echo "$dev" | grep -qE "^(tun|tap)"; then
+                uci set "network.$iface.proto=none"
+                echo "Fixed illegal proto for interface: $iface (device: $dev)"
+            fi
+            ;;
+    esac
+done
+uci commit network 2>/dev/null || true
+
+# ============================================================
+# 修复 2：自动将所有 tun/tap 接口加入 lan 防火墙区域
+# 动态扫描，不硬编码 myvpn/vpn0
+# ============================================================
+LAN_ZONE=$(uci show firewall 2>/dev/null | awk -F. '/=zone/{split($2,a,"[\\[\\]]"); idx=a[2]} /name='\''lan'\''/{if(idx!="") print "@zone["idx"]"}' | head -n 1)
+
+if [ -n "$LAN_ZONE" ]; then
+    # 获取当前已绑定的接口列表
+    bound=$(uci show firewall."$LAN_ZONE".network 2>/dev/null | cut -d= -f2 | tr -d "'" | tr '\n' ' ')
+    
+    # 遍历所有 network 接口，找到 device 为 tun/tap 的
+    for line in $(uci show network 2>/dev/null | grep "\.device=" | tr ' ' '#'); do
+        # 还原空格（如果有）
+        line=$(echo "$line" | tr '#' ' ')
+        iface=$(echo "$line" | sed -n 's/^network\.\([a-zA-Z0-9_]*\)\.device=.*/\1/p')
+        dev=$(echo "$line" | sed -n "s/^network\.$iface\.device='\(.*\)'/\1/p")
+        
+        if [ -n "$iface" ] && [ -n "$dev" ]; then
+            if echo "$dev" | grep -qE "^(tun|tap)"; then
+                if ! echo " $bound " | grep -q " $iface "; then
+                    uci add_list firewall."$LAN_ZONE".network="$iface"
+                    echo "Added $iface ($dev) to firewall zone $LAN_ZONE"
+                fi
+            fi
+        fi
+    done
+    uci commit firewall 2>/dev/null || true
 fi
 
-# 【动态截获一】准确寻找 lan 区域的 UCI 索引
-LAN_ZONE=$(uci show firewall | awk -F. '/=zone/{split($2,a,"[\\[\\]]"); idx=a[2]} /name='\''lan'\''/{if(idx!="") print "@zone["idx"]"}' | head -n 1)
-
-# 【动态截获二】区分配置节名与接口名，优先获取 dev 虚拟设备参数
-OVPN_CFG=$(uci show openvpn 2>/dev/null | awk -F[.=] '/=openvpn/{print $2; exit}')
-OVPN_IFACE=$(uci get openvpn."$OVPN_CFG".dev 2>/dev/null || true)
-OVPN_IFACE=${OVPN_IFACE:-$OVPN_CFG}
-
-# 绑定网卡至防火墙
-if [ -n "$LAN_ZONE" ] && [ -n "$OVPN_IFACE" ]; then
-    if ! uci show firewall."$LAN_ZONE".network | grep -q "$OVPN_IFACE"; then
-        uci add_list firewall."$LAN_ZONE".network="$OVPN_IFACE"
-        uci commit firewall
-    fi
-fi
-
-# 【绝对精准匹配】放行 1194 端口
-if ! uci show firewall | grep -q "\.name='Allow-OpenVPN'$"; then
+# ============================================================
+# 修复 3：放行 1194 端口（保持不变）
+# ============================================================
+if ! uci show firewall 2>/dev/null | grep -q "\.name='Allow-OpenVPN'$"; then
     uci add firewall rule
     uci set firewall.@rule[-1].name='Allow-OpenVPN'
     uci set firewall.@rule[-1].src='wan'
@@ -158,17 +174,14 @@ if ! uci show firewall | grep -q "\.name='Allow-OpenVPN'$"; then
     uci set firewall.@rule[-1].proto='udp'
     uci set firewall.@rule[-1].dest_port='1194'
     uci commit firewall
+    echo "Added firewall rule: Allow-OpenVPN (UDP 1194)"
 fi
 
-# 写入执行成功标记，形成闭环
 touch /etc/.ovpn_patch_applied
 exit 0
 EOF
 
-    # 赋予执行权限并恢复非严格模式，保障后续 Actions 其他编译环节不受影响
     chmod +x "$OVPNS_DIR/root/etc/uci-defaults/99-fix-openvpn-firewall"
     set +euo pipefail
-    
-    echo ">> luci-app-openvpn-server 修复完毕：动态截获与安全防护已全面就绪！"
 fi
 # --------------------------以上2026.06.06---------------------------------#
