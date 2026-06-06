@@ -103,24 +103,36 @@ echo "APK 兼容版本号修复完成！"
 # --------------------------以下2026.06.06---------------------------------#
 
 # -----------------------------------------------------------
-# 【终极完美版】luci-app-openvpn-server 安全修复与环境适配
+# 修复 luci-app-openvpn-server（或 luci-app-openvpn）防火墙与协议问题
 # -----------------------------------------------------------
+# 当前目录是 wrt/package/，从源码根目录开始查找
+OVPNS_DIR=""
 
-# 使用更宽泛的查找，不硬编码 wrt/ 子目录，同时支持 -name 匹配
-OVPNS_DIR=$(find "$GITHUB_WORKSPACE" -maxdepth 6 -type d -name "luci-app-openvpn-server" 2>/dev/null | head -n 1)
+# 优先查找精确名称（ImmortalWrt 某些版本可能有独立目录）
+for dir in $(find "$GITHUB_WORKSPACE/wrt/" -maxdepth 6 -type d -name "luci-app-openvpn-server" 2>/dev/null); do
+    OVPNS_DIR="$dir"
+    break
+done
 
-# 如果上面没找到，尝试相对路径（兼容不同 Actions 工作流结构）
+# 如果没找到，尝试标准名称（OpenWrt 官方 feeds 实际目录名）
 if [ -z "$OVPNS_DIR" ]; then
-    OVPNS_DIR=$(find . .. ../feeds ./feeds ../package ./package -maxdepth 5 -type d -name "luci-app-openvpn-server" 2>/dev/null | head -n 1)
+    for dir in $(find "$GITHUB_WORKSPACE/wrt/" -maxdepth 6 -type d -name "luci-app-openvpn" 2>/dev/null); do
+        OVPNS_DIR="$dir"
+        break
+    done
 fi
+
+# 调试输出（首次运行建议保留，确认路径）
+echo ">> DEBUG: PWD=$(pwd)"
+echo ">> DEBUG: OVPNS_DIR=$OVPNS_DIR"
 
 # 空值保护：找不到就跳过，不要崩
 if [ -z "$OVPNS_DIR" ]; then
-    echo ">> WARNING: luci-app-openvpn-server directory not found, skipping OpenVPN fix."
+    echo ">> WARNING: luci-app-openvpn-server/openvpn directory not found, skipping fix."
     exit 0
 fi
 
-echo ">> Found luci-app-openvpn-server at: $OVPNS_DIR"
+echo ">> Found OpenVPN LuCI directory at: $OVPNS_DIR"
 echo ">> Starting OpenVPN fix..."
 
 set -euo pipefail
@@ -131,7 +143,6 @@ cat << 'EOF' > "$OVPNS_DIR/root/etc/uci-defaults/99-fix-openvpn-firewall"
 #!/bin/sh
 [ -f "/etc/.ovpn_patch_applied" ] && exit 0
 
-# 如果 openvpn 配置尚未生成，跳过
 if ! uci show openvpn 2>/dev/null | grep -q "=openvpn"; then
     exit 0
 fi
