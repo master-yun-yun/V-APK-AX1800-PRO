@@ -102,42 +102,63 @@ echo "APK 兼容版本号修复完成！"
 
 # --------------------------以下2026.06.06---------------------------------#
 
+# -----------------------------------------------------------
 # 【终极完美版】luci-app-openvpn-server 安全修复与环境适配
+# -----------------------------------------------------------
+
+# 使用更宽泛的查找，不硬编码 wrt/ 子目录，同时支持 -name 匹配
+OVPNS_DIR=$(find "$GITHUB_WORKSPACE" -maxdepth 6 -type d -name "luci-app-openvpn-server" 2>/dev/null | head -n 1)
+
+# 如果上面没找到，尝试相对路径（兼容不同 Actions 工作流结构）
+if [ -z "$OVPNS_DIR" ]; then
+    OVPNS_DIR=$(find . .. ../feeds ./feeds ../package ./package -maxdepth 5 -type d -name "luci-app-openvpn-server" 2>/dev/null | head -n 1)
+fi
+
+# 空值保护：找不到就跳过，不要崩
+if [ -z "$OVPNS_DIR" ]; then
+    echo ">> WARNING: luci-app-openvpn-server directory not found, skipping OpenVPN fix."
+    exit 0
+fi
+
+echo ">> Found luci-app-openvpn-server at: $OVPNS_DIR"
+echo ">> Starting OpenVPN fix..."
+
+set -euo pipefail
+
+mkdir -p "$OVPNS_DIR/root/etc/uci-defaults"
+
 cat << 'EOF' > "$OVPNS_DIR/root/etc/uci-defaults/99-fix-openvpn-firewall"
 #!/bin/sh
 [ -f "/etc/.ovpn_patch_applied" ] && exit 0
 
-# ============================================================
-# 核心修复 1：删除系统/其他插件自动生成的冗余 vpn0 接口
-# 保留 myvpn（proto='openvpn'），它是 luci-app-openvpn-server 的启动触发器
-# ============================================================
+# 如果 openvpn 配置尚未生成，跳过
+if ! uci show openvpn 2>/dev/null | grep -q "=openvpn"; then
+    exit 0
+fi
+
+# 删除系统冗余的 vpn0 接口（如果存在）
 if uci show network.vpn0 >/dev/null 2>&1; then
     uci delete network.vpn0
     echo "Deleted redundant interface: vpn0"
 fi
 
-# 同时清理 firewall 中对 vpn0 的引用（避免残留无效配置）
-for rule in $(uci show firewall 2>/dev/null | grep "network='vpn0'" | cut -d. -f1-2 | sort -u); do
-    uci delete "$rule" 2>/dev/null || true
+# 清理 firewall 中对 vpn0 的残留引用
+for section in $(uci show firewall 2>/dev/null | grep "network='vpn0'" | cut -d. -f1-2 | sort -u); do
+    [ -n "$section" ] && uci delete "$section" 2>/dev/null || true
 done
 
-# ============================================================
-# 核心修复 2：将 myvpn 加入 lan 防火墙区域
-# 不硬编码 zone 索引，动态查找 lan
-# ============================================================
+# 动态查找 lan 区域
 LAN_ZONE=$(uci show firewall 2>/dev/null | awk -F. '/=zone/{split($2,a,"[\\[\\]]"); idx=a[2]} /name='\''lan'\''/{if(idx!="") print "@zone["idx"]"}' | head -n 1)
 
+# 将 myvpn 加入 lan 防火墙
 if [ -n "$LAN_ZONE" ] && uci show network.myvpn >/dev/null 2>&1; then
     if ! uci show firewall."$LAN_ZONE".network 2>/dev/null | grep -q "myvpn"; then
         uci add_list firewall."$LAN_ZONE".network='myvpn'
         uci commit firewall
-        echo "Added myvpn to firewall zone: $LAN_ZONE"
     fi
 fi
 
-# ============================================================
-# 核心修复 3：放行 1194 端口
-# ============================================================
+# 放行 1194 端口
 if ! uci show firewall 2>/dev/null | grep -q "\.name='Allow-OpenVPN'$"; then
     uci add firewall rule
     uci set firewall.@rule[-1].name='Allow-OpenVPN'
@@ -146,10 +167,14 @@ if ! uci show firewall 2>/dev/null | grep -q "\.name='Allow-OpenVPN'$"; then
     uci set firewall.@rule[-1].proto='udp'
     uci set firewall.@rule[-1].dest_port='1194'
     uci commit firewall
-    echo "Added firewall rule: Allow-OpenVPN (UDP 1194)"
 fi
 
 touch /etc/.ovpn_patch_applied
 exit 0
 EOF
+
+chmod +x "$OVPNS_DIR/root/etc/uci-defaults/99-fix-openvpn-firewall"
+set +euo pipefail
+
+echo ">> OpenVPN fix applied successfully."
 # --------------------------以上2026.06.06---------------------------------#
