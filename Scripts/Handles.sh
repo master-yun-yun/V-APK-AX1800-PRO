@@ -101,70 +101,42 @@ find ./ -name "Makefile" -path "*/luci-app-istoreenhance/*" -exec sed -i 's/PKG_
 echo "APK 兼容版本号修复完成！"
 
 # --------------------------以下2026.06.06---------------------------------#
-# -----------------------------------------------------------
-# 【终极完美版】luci-app-openvpn-server 安全修复与环境适配
-OVPNS_DIR=$(find "$GITHUB_WORKSPACE/wrt/" -maxdepth 5 -type d -path "*/luci-app-openvpn-server" 2>/dev/null | head -n 1)
 
-if [ -n "$OVPNS_DIR" ]; then
-    set -euo pipefail
-    mkdir -p "$OVPNS_DIR/root/etc/uci-defaults"
-    
-    cat << 'EOF' > "$OVPNS_DIR/root/etc/uci-defaults/99-fix-openvpn-firewall"
+# 【终极完美版】luci-app-openvpn-server 安全修复与环境适配
+cat << 'EOF' > "$OVPNS_DIR/root/etc/uci-defaults/99-fix-openvpn-firewall"
 #!/bin/sh
 [ -f "/etc/.ovpn_patch_applied" ] && exit 0
 
 # ============================================================
-# 修复 1：自动修正所有非法 proto 的 VPN 网络接口
-# 无论插件生成 myvpn、vpn0 还是其他名字，全部扫描处理
+# 核心修复 1：删除系统/其他插件自动生成的冗余 vpn0 接口
+# 保留 myvpn（proto='openvpn'），它是 luci-app-openvpn-server 的启动触发器
 # ============================================================
-for iface in $(uci show network 2>/dev/null | grep -oE "^network\.[a-zA-Z0-9_]+\.proto=" | sed 's/^network\.//;s/\.proto=$//' | sort -u); do
-    proto=$(uci get "network.$iface.proto" 2>/dev/null || true)
-    
-    # 匹配所有 OpenVPN 相关的非法协议值
-    case "$proto" in
-        ovpn|openvpn|ovpn-server|openvpn-server)
-            dev=$(uci get "network.$iface.device" 2>/dev/null || true)
-            # 只处理 tun/tap 设备，避免误改其他接口
-            if echo "$dev" | grep -qE "^(tun|tap)"; then
-                uci set "network.$iface.proto=none"
-                echo "Fixed illegal proto for interface: $iface (device: $dev)"
-            fi
-            ;;
-    esac
+if uci show network.vpn0 >/dev/null 2>&1; then
+    uci delete network.vpn0
+    echo "Deleted redundant interface: vpn0"
+fi
+
+# 同时清理 firewall 中对 vpn0 的引用（避免残留无效配置）
+for rule in $(uci show firewall 2>/dev/null | grep "network='vpn0'" | cut -d. -f1-2 | sort -u); do
+    uci delete "$rule" 2>/dev/null || true
 done
-uci commit network 2>/dev/null || true
 
 # ============================================================
-# 修复 2：自动将所有 tun/tap 接口加入 lan 防火墙区域
-# 动态扫描，不硬编码 myvpn/vpn0
+# 核心修复 2：将 myvpn 加入 lan 防火墙区域
+# 不硬编码 zone 索引，动态查找 lan
 # ============================================================
 LAN_ZONE=$(uci show firewall 2>/dev/null | awk -F. '/=zone/{split($2,a,"[\\[\\]]"); idx=a[2]} /name='\''lan'\''/{if(idx!="") print "@zone["idx"]"}' | head -n 1)
 
-if [ -n "$LAN_ZONE" ]; then
-    # 获取当前已绑定的接口列表
-    bound=$(uci show firewall."$LAN_ZONE".network 2>/dev/null | cut -d= -f2 | tr -d "'" | tr '\n' ' ')
-    
-    # 遍历所有 network 接口，找到 device 为 tun/tap 的
-    for line in $(uci show network 2>/dev/null | grep "\.device=" | tr ' ' '#'); do
-        # 还原空格（如果有）
-        line=$(echo "$line" | tr '#' ' ')
-        iface=$(echo "$line" | sed -n 's/^network\.\([a-zA-Z0-9_]*\)\.device=.*/\1/p')
-        dev=$(echo "$line" | sed -n "s/^network\.$iface\.device='\(.*\)'/\1/p")
-        
-        if [ -n "$iface" ] && [ -n "$dev" ]; then
-            if echo "$dev" | grep -qE "^(tun|tap)"; then
-                if ! echo " $bound " | grep -q " $iface "; then
-                    uci add_list firewall."$LAN_ZONE".network="$iface"
-                    echo "Added $iface ($dev) to firewall zone $LAN_ZONE"
-                fi
-            fi
-        fi
-    done
-    uci commit firewall 2>/dev/null || true
+if [ -n "$LAN_ZONE" ] && uci show network.myvpn >/dev/null 2>&1; then
+    if ! uci show firewall."$LAN_ZONE".network 2>/dev/null | grep -q "myvpn"; then
+        uci add_list firewall."$LAN_ZONE".network='myvpn'
+        uci commit firewall
+        echo "Added myvpn to firewall zone: $LAN_ZONE"
+    fi
 fi
 
 # ============================================================
-# 修复 3：放行 1194 端口（保持不变）
+# 核心修复 3：放行 1194 端口
 # ============================================================
 if ! uci show firewall 2>/dev/null | grep -q "\.name='Allow-OpenVPN'$"; then
     uci add firewall rule
@@ -180,8 +152,4 @@ fi
 touch /etc/.ovpn_patch_applied
 exit 0
 EOF
-
-    chmod +x "$OVPNS_DIR/root/etc/uci-defaults/99-fix-openvpn-firewall"
-    set +euo pipefail
-fi
 # --------------------------以上2026.06.06---------------------------------#
