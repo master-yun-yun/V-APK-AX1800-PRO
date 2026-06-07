@@ -171,7 +171,7 @@ UPDATE_PACKAGE "taskd" "kiddin9/op-packages" "main" "pkg"
 UPDATE_PACKAGE "luci-app-memos" "kiddin9/op-packages" "main" "pkg"
 
 # 原高级设置升级版本---2026.06.01-测试对vpn影响
-#UPDATE_PACKAGE "luci-app-advancedplus" "sirpdboy/luci-app-advancedplus" "main"
+UPDATE_PACKAGE "luci-app-advancedplus" "sirpdboy/luci-app-advancedplus" "main"
 
 # luci-app-athena-led-雅典娜led屏幕显示（第一个源显示效果不好）
 #UPDATE_PACKAGE "luci-app-athena-led" "haipengno1/luci-app-athena-led" "main"
