@@ -147,8 +147,8 @@ CONFIG_PACKAGE_wireguard-tools=y
 CONFIG_PACKAGE_kmod-wireguard=y
 
 # UPDATE_PACKAGE "easytier" "EasyTier/luci-app-easytier" "main"
-CONFIG_PACKAGE_luci-app-zerotier=y
-CONFIG_PACKAGE_zerotier=y
+#CONFIG_PACKAGE_luci-app-zerotier=y
+#CONFIG_PACKAGE_zerotier=y
 
 # FTP服务器
 CONFIG_PACKAGE_luci-app-vsftpd=y
@@ -257,8 +257,8 @@ CONFIG_PACKAGE_luci-app-memos=y
 CONFIG_PACKAGE_verysync=y
 CONFIG_PACKAGE_luci-app-verysync=y
 
-# 高级系统设置----测试是否影响vpn-2026.06.01
-#CONFIG_PACKAGE_luci-app-advancedplus=y
+# 高级系统设置
+CONFIG_PACKAGE_luci-app-advancedplus=y
 
 # istore增强
 CONFIG_PACKAGE_istoreenhance=y
