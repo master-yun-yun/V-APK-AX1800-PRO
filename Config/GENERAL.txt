@@ -138,17 +138,20 @@ CONFIG_PACKAGE_sudo=y
 # DDNS依赖
 CONFIG_PACKAGE_drill=y
 
-# luci-app-openvpn-server服务器
+# luci-app-openvpn-server服务器---官源
 CONFIG_PACKAGE_luci-app-openvpn-server=y
 
-# WireGuard-vpn服务器
+# WireGuard-vpn服务器---官源
 CONFIG_PACKAGE_luci-proto-wireguard=y
 CONFIG_PACKAGE_wireguard-tools=y
 CONFIG_PACKAGE_kmod-wireguard=y
 
-# UPDATE_PACKAGE "easytier" "EasyTier/luci-app-easytier" "main"
-#CONFIG_PACKAGE_luci-app-zerotier=y
-#CONFIG_PACKAGE_zerotier=y
+# EasyTier--虚拟组网（国产新兴，极简单）
+CONFIG_PACKAGE_luci-app-easytier=y
+
+# 虚拟组网---官源
+CONFIG_PACKAGE_luci-app-zerotier=y
+CONFIG_PACKAGE_zerotier=y
 
 # FTP服务器
 CONFIG_PACKAGE_luci-app-vsftpd=y
@@ -203,7 +206,7 @@ CONFIG_LIBICU_ICU_UC=y
 CONFIG_PACKAGE_luci-app-wifischedule=y
 
 # docker
-CONFIG_PACKAGE_luci-app-dockerman=y
+#CONFIG_PACKAGE_luci-app-dockerman=y
 
 # 访问时间控制
 #CONFIG_PACKAGE_luci-app-accesscontrol=y
