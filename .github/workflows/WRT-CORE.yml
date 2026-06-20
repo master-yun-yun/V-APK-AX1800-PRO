@@ -176,6 +176,149 @@ jobs:
 
           make defconfig -j$(nproc) && make clean -j$(nproc)
 
+      # ========== 1. 获取 Easytier 最新版本 ==========2026.06.20新增====== #
+      - name: Get EasyTier latest version
+        id: easytier_version
+        if: env.WRT_TEST != 'true'
+        run: |
+          if [ -f /tmp/easytier_version ]; then
+            VERSION=$(cat /tmp/easytier_version)
+            echo "Using cached version: ${VERSION}"
+          else
+            VERSION=$(curl -s https://api.github.com/repos/EasyTier/EasyTier/releases/latest | grep '"tag_name":' | head -1 | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
+            if [ -z "${VERSION}" ] || [ "${VERSION}" = "null" ]; then
+              echo "Warning: Failed to fetch latest version from GitHub API, using fallback"
+              VERSION="v2.6.4"
+            fi
+            echo "${VERSION}" > /tmp/easytier_version
+            echo "Fetched latest version: ${VERSION}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      # ========== 2. 提取目标架构 ==========
+      - name: Get target architecture for Easytier
+        id: easytier_arch
+        if: env.WRT_TEST != 'true'
+        run: |
+          cd ./wrt/
+          ARCH=$(grep '^CONFIG_ARCH=' .config | cut -d= -f2 | tr -d '"')
+          CPU_TYPE=$(grep '^CONFIG_CPU_TYPE=' .config | cut -d= -f2 | tr -d '"')
+          case "${ARCH}" in
+            x86_64)     SLUG="x86_64" ;;
+            aarch64)    SLUG="aarch64" ;;
+            arm)
+              if echo "${CPU_TYPE}" | grep -qE "cortex-a9|cortex-a7|cortex-a8|cortex-a15|cortex-a17"; then
+                SLUG="armv7"
+              elif echo "${CPU_TYPE}" | grep -qE "cortex-a5|cortex-a53"; then
+                SLUG="armhf"
+              else
+                SLUG="arm"
+              fi ;;
+            mipsel)     SLUG="mipsel" ;;
+            mips)       SLUG="mips" ;;
+            riscv64)    SLUG="riscv64" ;;
+            loongarch64) SLUG="loongarch64" ;;
+            *)          SLUG="unknown" ;;
+          esac
+          echo "arch=${SLUG}" >> $GITHUB_OUTPUT
+
+      # ========== 3. 缓存二进制文件 ==========
+      - name: Cache EasyTier binaries
+        id: cache
+        if: env.WRT_TEST != 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ./wrt/files/usr/bin/easytier-core
+            ./wrt/files/usr/bin/easytier-cli
+            ./wrt/files/usr/bin/easytier-web
+            ./wrt/files/usr/bin/easytier-web-embed
+          key: easytier-${{ steps.easytier_version.outputs.version }}-${{ steps.easytier_arch.outputs.arch }}
+
+      # ========== 4. 下载二进制（缓存未命中时） ==========
+      - name: Download EasyTier binaries
+        if: env.WRT_TEST != 'true' && steps.cache.outputs.cache-hit != 'true'
+        run: |
+          cd ./wrt/
+          mkdir -p files/usr/bin
+
+          # 复用前面步骤的输出
+          EASYTIER_VERSION="${{ steps.easytier_version.outputs.version }}"
+          ET_ARCH="${{ steps.easytier_arch.outputs.arch }}"
+
+          if [ -z "${EASYTIER_VERSION}" ] || [ "${ET_ARCH}" = "unknown" ]; then
+            echo "Error: Invalid version or architecture"
+            exit 1
+          fi
+          echo "Using EasyTier version: ${EASYTIER_VERSION}, arch: ${ET_ARCH}"
+
+          # 确保 unzip 可用
+          if ! command -v unzip &> /dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y unzip || {
+              echo "Error: Failed to install unzip"
+              exit 1
+            }
+          fi
+
+          # 下载（带重试和备用源）
+          ZIP_FILE="easytier-linux-${ET_ARCH}-${EASYTIER_VERSION}.zip"
+          PRIMARY_URL="https://ghfast.top/https://github.com/EasyTier/EasyTier/releases/download/${EASYTIER_VERSION}"
+          FALLBACK_URL="https://github.com/EasyTier/EasyTier/releases/download/${EASYTIER_VERSION}"
+
+          download_with_retry() {
+            local url=$1 output=$2 retries=3
+            for i in $(seq 1 $retries); do
+              echo "Attempt $i: downloading ${url} ..."
+              wget -q --show-progress -O "${output}" "${url}" && return 0
+              sleep 3
+            done
+            return 1
+          }
+
+          if ! download_with_retry "${PRIMARY_URL}/${ZIP_FILE}" /tmp/easytier.zip; then
+            echo "Primary mirror failed, trying fallback..."
+            if ! download_with_retry "${FALLBACK_URL}/${ZIP_FILE}" /tmp/easytier.zip; then
+              echo "Error: Failed to download ${ZIP_FILE}"
+              exit 1
+            fi
+          fi
+
+          # 验证下载
+          [ -s /tmp/easytier.zip ] || { echo "Error: Empty download"; exit 1; }
+
+          # 解压
+          unzip -o /tmp/easytier.zip -d /tmp/easytier || { echo "Error: Extract failed"; exit 1; }
+
+          EXTRACT_DIR=$(find /tmp/easytier -maxdepth 1 -type d | grep -v "^/tmp/easytier$" | head -1)
+          [ -n "${EXTRACT_DIR}" ] || { echo "Error: No extract dir"; ls -la /tmp/easytier/; exit 1; }
+
+          # 复制文件
+          for bin in easytier-core easytier-cli easytier-web easytier-web-embed; do
+            if [ -f "${EXTRACT_DIR}/${bin}" ]; then
+              cp "${EXTRACT_DIR}/${bin}" files/usr/bin/
+              chmod +x "files/usr/bin/${bin}"
+              echo "Installed: ${bin}"
+            fi
+          done
+
+          # 验证核心文件
+          [ -f "files/usr/bin/easytier-core" ] || { echo "Error: easytier-core missing"; exit 1; }
+
+          # 清理
+          rm -rf /tmp/easytier.zip /tmp/easytier
+          echo "EasyTier binaries installed successfully"
+
+      # ========== 5. 修正权限（仅缓存命中时） ==========
+      - name: Fix EasyTier permissions
+        if: env.WRT_TEST != 'true' && steps.cache.outputs.cache-hit == 'true'
+        run: |
+          cd ./wrt/
+          for f in files/usr/bin/easytier-*; do
+            [ -f "$f" ] && chmod +x "$f" && echo "Fixed: $f"
+          done
+
+      # ========== 获取 Easytier 最新版本 ==========2026.06.20新增====== #
+
       - name: Download Packages
         if: env.WRT_TEST != 'true'
         run: |
