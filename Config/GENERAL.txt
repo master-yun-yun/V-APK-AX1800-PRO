@@ -238,8 +238,8 @@ CONFIG_PACKAGE_luci-theme-shadcn=y
 # 主题luci-theme-noobwrt
 CONFIG_PACKAGE_luci-theme-noobwrt=y
 
-# 主题luci-theme-fluent
-CONFIG_PACKAGE_luci-theme-fluent=y
+# 主题luci-theme-fluent===编译失败
+#CONFIG_PACKAGE_luci-theme-fluent=y
 
 # 通用共享
 CONFIG_PACKAGE_samba4-server=y
