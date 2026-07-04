@@ -167,7 +167,7 @@ jobs:
           cd ./wrt/
           
           # 应用 node-pnpm 修复补丁
-          $GITHUB_WORKSPACE/Scripts/node-pnpm-patch.sh
+          #$GITHUB_WORKSPACE/Scripts/node-pnpm-patch.sh
           
           if [[ "${WRT_CONFIG,,}" == *"test"* ]]; then
             cat $GITHUB_WORKSPACE/Config/$WRT_CONFIG.txt >> .config
